@@ -1,0 +1,130 @@
+---
+title: "Reproducible-Research-Course-project-1"
+author: "D.Dashinov"
+date: "10/21/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# Getting the data
+
+First I'm going to write some code for downloading the data
+
+```{r get data}
+fileURL <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+download.file(fileURL, destfile = "data.zip")
+
+unzip("data.zip", files = NULL, list = FALSE, overwrite = TRUE,
+      junkpaths = FALSE, exdir = ".", unzip = "internal",
+      setTimes = FALSE)
+
+DataActivity <- read.csv("activity.csv")
+```
+
+# Question 1
+
+What is mean total number of steps taken per day?
+
+```{r steps per day}
+library(dplyr)
+library(ggplot2)
+
+Q1 <- DataActivity %>% group_by(date) %>% summarise(Mean = mean(steps, na.rm = T))
+
+qplot(Q1$Mean, geom="histogram",xlab="Total Steps",ylab="Counts",main="Total Steps Historgram")
+
+summary(Q1)
+
+
+```
+
+# Question 2
+
+What is the average daily activity pattern?
+
+```{r Average daily activity pattern}
+
+library(ggplot2)
+
+df <- DataActivity %>% group_by(interval) %>% summarise(Mean = mean(steps, na.rm = T))
+
+ggplot(df, aes(x = interval, y = Mean, group=1)) + 
+        geom_path(aes(color = "orage")) + 
+        ggtitle("Average daily activity pattern") + 
+        ylab("Steps")
+```
+
+Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+```{r 5-minute interval with the maximum number of steps}
+df[which.max(df$Mean), ]$interval
+```
+
+# Question 3
+
+Imputing missing values
+
+```{r missing values}
+sum(is.na(DataActivity$steps))
+
+imputed_steps <- df$Mean[match(DataActivity$interval, df$interval)]
+```
+
+Creating a new dataset that is equal to the original dataset but with the missing data filled in.
+
+```{r, substituting missing values}
+
+activity_imputed <- transform(DataActivity, steps = ifelse(is.na(DataActivity$steps), 
+                                        yes = imputed_steps, no = DataActivity$steps))
+total_steps_imputed <- aggregate(steps ~ date, activity_imputed, sum)
+names(total_steps_imputed) <- c("date", "daily_steps")
+```
+
+Histogram of the total number of steps taken each day with and report the mean and median total number of steps taken per day.
+
+```{r histogram}
+hist(total_steps_imputed$daily_steps, col = "darkblue", xlab = "Total steps per day", ylim = c(0,30), main = "Total number of steps taken each day", breaks = seq(0,25000,by=2500))
+```
+
+Here is the mean
+
+```{r}
+mean(total_steps_imputed$daily_steps)
+```
+
+Here is the median
+
+```{r}
+median(total_steps_imputed$daily_steps)
+```
+
+Creating a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.
+
+```{r}
+
+DataActivity$date <- as.Date(strptime(DataActivity$date, format="%Y-%m-%d"))
+
+DataActivity$datetype <- sapply(DataActivity$date, function(x) {
+        if (weekdays(x) == "Saturday" | weekdays(x) =="Sunday") 
+        {y <- "Weekend"} else 
+        {y <- "Weekday"}
+        y
+})
+
+```
+
+Plotting by weekdays and weekends
+
+```{r last plot}
+activity_by_date <- aggregate(steps~interval + datetype, DataActivity, mean, na.rm = TRUE)
+
+activity_by_date$datetype <- as.factor(activity_by_date$datetype)
+activity_by_date$interval <- as.numeric(activity_by_date$interval)
+
+plot<- ggplot(activity_by_date, aes(x = interval, y = steps, color = datetype)) +
+        geom_line() +
+        labs(title = "Average daily steps by type of date", x = "Interval", y = "Average number of steps") +
+        facet_wrap(~datetype, ncol = 1, nrow=2)
+print(plot)
+```
